@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Waste Classifier Web App</title>
+    <!-- Load TensorFlow.js and the TFLite task library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/tflite@0.0.1-alpha.3/dist/tflite.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #video-container {
+            position: relative;
+            display: inline-block;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        video {
+            width: 100%;
+            max-width: 500px;
+            transform: scaleX(-1); /* Mirror view */
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+        #status {
+            color: #666;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>Real-time Waste Classifier</h1>
+    <div id="status">Loading model... please wait...</div>
+    <br>
+    <div id="video-container">
+        <video id="webcam" autoplay playsinline></video>
+    </div>
+    <div id="result">Prediction will appear here</div>
+
+    <script>
+        const classes = ['Green_Organic', 'Landfill', 'Recycled'];
+        let model;
+        const video = document.getElementById('webcam');
+        const statusDiv = document.getElementById('status');
+        const resultDiv = document.getElementById('result');
+
+        // Initialize camera stream and load TFLite model
+        async function setupApp() {
+            try {
+                // 1. Get user media camera stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment' }, // Uses rear camera on phones
+                    audio: false
+                });
+                video.srcObject = stream;
+
+                // 2. Load TFLite Model
+                statusDiv.innerText = "Loading TFLite model...";
+                model = await tflite.loadTFLiteModel('./waste_classifier.tflite');
+                statusDiv.innerText = "Model loaded! Starting classification...";
+
+                // 3. Start prediction loop
+                classifyFrame();
+            } catch (err) {
+                statusDiv.innerText = "Error starting app: " + err.message;
+                console.error(err);
+            }
+        }
+
+        // Run continuous real-time classification
+        async function classifyFrame() {
+            if (model) {
+                // Convert HTML video frame to a Tensor [224, 224, 3]
+                const imgTensor = tf.tidy(() => {
+                    let img = tf.browser.fromPixels(video);
+                    // Center crop to square
+                    const minDim = Math.min(img.shape[0], img.shape[1]);
+                    const startY = (img.shape[0] - minDim) / 2;
+                    const startX = (img.shape[1] - minDim) / 2;
+                    img = img.slice([startY, startX, 0], [minDim, minDim, 3]);
+                    // Resize and scale values between -1 and 1 to match training normalization
+                    return tf.image.resizeBilinear(img, [224, 224])
+                             .div(127.5)
+                             .sub(1.0)
+                             .expandDims(0);
+                });
+
+                // Run inference
+                const outputTensor = model.predict(imgTensor);
+                const predictions = await outputTensor.data();
+
+                // Cleanup Tensors from GPU memory
+                imgTensor.dispose();
+                outputTensor.dispose();
+
+                // Find the index with the highest probability
+                const maxIndex = predictions.indexOf(Math.max(...predictions));
+                const confidence = (predictions[maxIndex] * 100).toFixed(1);
+                
+                resultDiv.innerText = `Prediction: ${classes[maxIndex]} (${confidence}%)`;
+            }
+            
+            // Request the next animation frame to loop
+            requestAnimationFrame(classifyFrame);
+        }
+
+        // Start application
+        setupApp();
+    </script>
+</body>
+</html>
