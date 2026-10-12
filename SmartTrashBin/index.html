@@ -4,9 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waste Classifier - Bin Gateway</title>
-    <!-- TensorFlow.js + TFLite runtime (versions pinned; this pair is known to work together) -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js"></script>
+    <!-- TensorFlow.js and TFLite are loaded by the script below, with fallbacks -->
     <!-- MQTT over WebSockets -->
     <script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
     <style>
@@ -21,7 +19,7 @@
     </style>
 </head>
 <body>
-    <h1>Real-time Waste Classifier</h1>
+    <h1>Real-time Waste Classifier <small>(v3)</small></h1>
     <div id="status">Starting...</div>
     <br>
     <div id="video-container">
@@ -89,9 +87,45 @@
             );
         }
 
+        // ---------------- script loader with fallbacks ----------------
+        const TFJS_URLS = [
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js",
+            "https://unpkg.com/@tensorflow/tfjs@3.20.0/dist/tf.min.js"
+        ];
+        const TFLITE_URLS = [
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js",
+            "https://unpkg.com/@tensorflow/tfjs-tflite@0.0.1-alpha.9/dist/tf-tflite.min.js",
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js",
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite/dist/tf-tflite.min.js"
+        ];
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = () => reject(new Error("could not load " + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        async function loadFirst(urls, isReady, label) {
+            for (const u of urls) {
+                try {
+                    statusDiv.innerText = "Loading " + label + "...";
+                    await loadScript(u);
+                    if (isReady()) { console.log(label + " loaded from " + u); return u; }
+                } catch (e) { console.warn(e.message); }
+            }
+            throw new Error(label + " failed to load from every source:\n" + urls.join("\n"));
+        }
+
         // ---------------- camera + model ----------------
         async function setupApp() {
             try {
+                if (typeof mqtt === 'undefined') throw new Error("MQTT library did not load (check your internet connection)");
+                await loadFirst(TFJS_URLS, () => window.tf, "TensorFlow.js");
+                await loadFirst(TFLITE_URLS, () => window.tflite, "TFLite runtime");
                 setupMqtt();
                 setupGps();
 
