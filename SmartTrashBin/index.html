@@ -1,12 +1,12 @@
-<!DOCTYPE html>
+html_code = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Waste Classifier Web App</title>
-    <!-- Load TensorFlow.js and the TFLite task library -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/tflite@0.0.1-alpha.3/dist/tflite.js"></script>
+    <!-- Load robust TensorFlow.js and TFLite WASM Runner dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/tflite@0.0.1-alpha.35/dist/tflite.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -59,7 +59,7 @@
         const resultDiv = document.getElementById('result');
 
         // Initialize camera stream and load TFLite model
-        async function setupApp() {
+        async function setupApp() { 
             try {
                 // 1. Get user media camera stream
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -70,6 +70,12 @@
 
                 // 2. Load TFLite Model
                 statusDiv.innerText = "Loading TFLite model...";
+                
+                // Verify if tflite loader is loaded from CDN
+                if (typeof tflite === 'undefined') {
+                    throw new Error("TFLite library failed to load from CDN. Please check your network connection.");
+                }
+                
                 model = await tflite.loadTFLiteModel('./waste_classifier.tflite');
                 statusDiv.innerText = "Model loaded! Starting classification...";
 
@@ -110,10 +116,10 @@
                 // Find the index with the highest probability
                 const maxIndex = predictions.indexOf(Math.max(...predictions));
                 const confidence = (predictions[maxIndex] * 100).toFixed(1);
-                
+
                 resultDiv.innerText = `Prediction: ${classes[maxIndex]} (${confidence}%)`;
             }
-            
+
             // Request the next animation frame to loop
             requestAnimationFrame(classifyFrame);
         }
@@ -123,3 +129,10 @@
     </script>
 </body>
 </html>
+"""
+
+# Save the web application template to /content
+with open('/content/index.html', 'w') as f:
+    f.write(html_code)
+
+print("index.html successfully updated with stable CDN links! Ready to download.")
